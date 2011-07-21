@@ -2650,6 +2650,14 @@ broken_combination:
 	if (tb[NL80211_ATTR_DEVICE_AP_SME])
 		info->device_ap_sme = 1;
 
+#ifdef ANDROID_P2P
+	/*
+	 * TODO: Make Android drivers advertise NL80211_ATTR_DEVICE_AP_SME
+	 * properly to avoid need for this..
+	 */
+	info->device_ap_sme = 1;
+#endif /* ANDROID_P2P */
+
 	if (tb[NL80211_ATTR_FEATURE_FLAGS]) {
 		u32 flags = nla_get_u32(tb[NL80211_ATTR_FEATURE_FLAGS]);
 
@@ -6372,6 +6380,7 @@ static int nl80211_setup_ap(struct i802_bss *bss)
 		if (nl80211_mgmt_subscribe_ap(bss))
 			return -1;
 
+#ifndef ANDROID_P2P
 	if (drv->device_ap_sme && !drv->use_monitor)
 		if (nl80211_mgmt_subscribe_ap_dev_sme(bss))
 			return -1;
@@ -6380,6 +6389,15 @@ static int nl80211_setup_ap(struct i802_bss *bss)
 	    nl80211_create_monitor_interface(drv) &&
 	    !drv->device_ap_sme)
 		return -1;
+#else /* ANDROID_P2P */
+	if (drv->device_ap_sme)
+		if (nl80211_mgmt_subscribe_ap_dev_sme(bss))
+			return -1;
+
+	if (drv->use_monitor &&
+	    nl80211_create_monitor_interface(drv))
+		return -1;
+#endif /* ANDROID_P2P */
 
 	if (drv->device_ap_sme &&
 	    wpa_driver_nl80211_probe_req_report(bss, 1) < 0) {
@@ -6451,7 +6469,11 @@ static int wpa_driver_nl80211_hapd_send_eapol(
 	int res;
 	int qos = flags & WPA_STA_WMM;
 
+#ifndef ANDROID_P2P
 	if (drv->device_ap_sme || !drv->use_monitor)
+#else /* ANDROID_P2P */
+	if (drv->device_ap_sme && !drv->use_monitor)
+#endif /* ANDROID_P2P */
 		return nl80211_send_eapol_data(bss, addr, data, data_len);
 
 	len = sizeof(*hdr) + (qos ? 2 : 0) + sizeof(rfc1042_header) + 2 +
